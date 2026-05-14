@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neo AI</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:tahoma;background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);display:flex;justify-content:center;align-items:center;height:100vh;color:white}
+.app{width:100%;max-width:430px;height:100vh;background:rgba(0,0,0,0.6);display:flex;flex-direction:column}
+.header{padding:15px;text-align:center;font-weight:bold;font-size:18px;background:rgba(0,0,0,0.7);position:relative}
+.clear-btn{position:absolute;left:10px;top:12px;background:red;border:none;color:white;padding:5px 10px;border-radius:10px;font-size:12px;cursor:pointer}
+.login{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:20px;gap:15px}
+.login input{width:100%;padding:12px;border:none;border-radius:20px}
+.login button{width:100%;padding:12px;border:none;border-radius:20px;background:#00f5d4;font-weight:bold}
+.chat-section{flex:1;display:flex;flex-direction:column}
+.chat-box{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth}
+.message{padding:10px 14px;border-radius:16px;max-width:80%;font-size:14px;line-height:1.5;word-wrap:break-word}
+.user{background:#00f5d4;color:black;align-self:flex-end}
+.bot{background:#8338ec;align-self:flex-start}
+.input-area{display:flex;padding:10px;background:rgba(0,0,0,0.7);flex-shrink:0;gap:5px}
+.input-area input{flex:1;padding:10px;border:none;border-radius:20px}
+.input-area button{padding:10px 12px;border:none;border-radius:20px;background:#ffbe0b;font-weight:bold;cursor:pointer}
+img.generated{max-width:100%;border-radius:16px;margin:6px 0}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<div class="app">
+<div class="header">
+🤖 Crot
+<button class="clear-btn hidden" id="clearChat" onclick="clearChat()">پاک کردن</button>
+</div>
+
+<div class="login" id="loginPage">
+    <h3>رمز ورود</h3>
+    <input type="password" id="passwordInput" placeholder="رمز را وارد کنید">
+    <button onclick="checkPassword()">ورود</button>
+</div>
+
+<div class="chat-section hidden" id="chatPage">
+    <div class="chat-box" id="chatBox"></div>
+
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="پیام یا دستور ساخت تصویر..." onkeypress="if(event.key==='Enter') sendMessage()">
+        <button onclick="sendMessage()">ارسال</button>
+        <button onclick="gerateImage()">🎨 تصویر</button>
+    </div>
+</div>
+</div>
+
+<script>
+const API_KEY = "aa-voWqSjn8LM64JfhSCqupDCi5FZQwvwmTWRf1tM2GWuQMIqmw";
+const CHAT_URL = "https://api.avalapis.ir/v1";
+const IMAGE_URL = "https://api.avalapis.ir/v1";
+const PASSWORD = "sobhan1389";
+let chatMemory = []; // حافظه پیام‌ها برای context
+
+function checkPassword(){
+    if(document.getElementById("passwordInput").value === PASSWORD){
+        document.getElementById("loginPage").classList.add("hidden");
+        document.getElementById("chatPage").classList.remove("hidden");
+        document.getElementById("clearChat").classList.remove("hidden");
+        loadChat();
+    } else { alert("❌ رمز اشتباه است"); }
+}
+
+/* ذخیره و لود پیام‌ها */
+function addMessage(text,type,save=true){
+    const msg = document.createElement("div");
+    msg.className = "message " + type;
+    msg.innerText = text;
+    document.getElementById("chatBox").appendChild(msg);
+    const chatBox = document.getElementById("chatBox");
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    if(save){
+        chatMemory.push({role:type==='user'?'user':'assistant',content:text});
+        localStorage.setItem("neoChat",JSON.stringify(chatMemory));
+    }
+}
+
+function loadChat(){
+    let messages = JSON.parse(localStorage.getItem("neoChat")) || [];
+    chatMemory = messages;
+    messages.forEach(msg=>{
+        addMessage(msg.content,msg.role==='user'?'user':'bot',false);
+    });
+}
+
+function clearChat(){
+    localStorage.removeItem("neoChat");
+    document.getElementById("chatBox").innerHTML="";
+    chatMemory=[];
+}
+
+/* ارسال پیام */
+async function sendMessage(){
+    const input = document.getElementById("userInput");
+    const message = input.value.trim();
+    if(!message) return;
+    addMessage(message,"user");
+    input.value="";
+    addMessage("⏳ در حال دریافت پاسخ...","bot",false);
+
+    try{
+        const res = await fetch(CHAT_URL,{
+            method:"POST",
+            headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
+            body:JSON.stringify({
+                model:"gpt-5-mini",
+                messages:[{role:"system",content:"You are Neo AI and answer in Persian."},...chatMemory.filter(m=>m.role).map(m=>({role:m.role,content:m.content})),{role:"user",content:message}]
+            })
+        });
+        const data = await res.json();
+
+        document.querySelectorAll(".bot").forEach(e=>{if(e.innerText.includes("در حال دریافت")) e.remove()});
+
+        if(data.choices && data.choices.length>0){
+            addMessage(data.choices[0].message.content,"bot");
+        } else { addMessage("❌ پاسخ دریافت نشد","bot"); }
+
+    } catch(e){ addMessage("🚨 خطا: "+e.message,"bot"); }
+}
+
+/* تولید تصویر */
+async function generateImage(){
+    const input = document.getElementById("userInput");
+    const prompt = input.value.trim();
+    if(!prompt) return;
+    addMessage("⏳ در حال ساخت تصویر...","bot",false);
+    input.value="";
+
+    try{
+        const res = await fetch(IMAGE_URL,{
+            method:"POST",
+            headers:{"Content-Type":"application/json","Authorization":"Bearer "+API_KEY},
+            body:JSON.stringify({prompt:prompt,size:"1024x1024"})
+        });
+        const data = await res.json();
+        document.querySelectorAll(".bot").forEach(e=>{if(e.innerText.includes("ساخت تصویر")) e.remove()});
+        if(data.data && data.data.length>0){
+            const img = document.createElement("img");
+            img.src = data.data[0].url;
+            img.className="generated";
+            document.getElementById("chatBox").appendChild(img);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        } else { addMessage("❌ تصویر ساخته نشد","bot"); }
+
+    } catch(e){ addMessage("🚨 خطا: "+e.message,"bot"); }
+}
+</script>
+
+</body>
+</html>
